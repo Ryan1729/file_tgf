@@ -1,8 +1,6 @@
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
-#[structopt(name = "file_tgf")]
 struct Opt {
     // /// Input directory. Defaults to the current directory
     // #[structopt(name = "input", long, short, parse(from_os_str))]
@@ -12,8 +10,7 @@ struct Opt {
     // #[structopt(name = "output", long, short, parse(from_os_str))]
     // output: Option<PathBuf>,
 
-    /// A regex to extract the node names from with the file.
-    #[structopt(long, short)]
+    /// A regex to extract the node names from within the file.
     extract_regex: String,
 
     // /// A replacement regex applied to the result of the extract-find regex.
@@ -31,11 +28,14 @@ struct Opt {
 }
 
 use regex::Regex;
+use std::error::Error;
+use std::fs::File;
+use std::io::{BufReader, BufRead};
 
-fn main() {
+fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
 
-    let re = Regex::new(opt.extract_regex)?;
+    let re = Regex::new(&opt.extract_regex)?;
 
     let mut edges = Vec::new();
 
@@ -44,13 +44,25 @@ fn main() {
     let search_files = WalkDir::new(".").into_iter().filter_map(|e| e.ok());
 
     for dir_entry in search_files {
-        let file_node = dir_entry.path()
-            .stem()
+        let path = dir_entry.path();
+        let file_node: String = path
+            .file_stem()
             .and_then(|s| s.to_str())
-            .unwrap_or("file_tgf_unknown");
+            .unwrap_or("file_tgf_unknown")
+            .to_owned();
 
-        for capture in re.captures_iter(text) {
-            edges.push(file_node, capture[1]);
+        let reader = {
+            if let Ok(f) = File::open(path){
+                BufReader::new(f)
+            } else {
+                continue;
+            }
+        };
+
+        for line in reader.lines().filter_map(|l| l.ok()) {
+            for capture in re.captures_iter(&line) {
+                edges.push((file_node.clone(), (&capture[1]).to_owned()));
+            }
         }
     }
 
@@ -59,10 +71,12 @@ fn main() {
     let tgf = get_tgf(&edges);
 
     println!("{}", tgf);
+
+    Ok(())
 }
 
 //this fn was originally from https://github.com/Ryan1729/lua_call_tgf
-fn get_tgf<T: AsRef<str>>(edges: &Vec<(T, T)>) -> String {
+fn get_tgf<S1: AsRef<str>, S2: AsRef<str>>(edges: &Vec<(S1, S2)>) -> String {
     use std::collections::HashMap;
 
     let mut node_labels = HashMap::new();
