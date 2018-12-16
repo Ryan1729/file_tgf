@@ -68,21 +68,25 @@ fn main() -> Result<(), Box<Error>> {
 
     edges.sort();
 
-    let tgf = get_tgf(&edges);
+    let tgf = get_tgf(|| Box::new(edges.iter()));
 
     println!("{}", tgf);
 
     Ok(())
 }
 
-//this fn was originally from https://github.com/Ryan1729/lua_call_tgf
-fn get_tgf<S1: AsRef<str>, S2: AsRef<str>>(edges: &Vec<(S1, S2)>) -> String {
+//the original version of this fn was from https://github.com/Ryan1729/lua_call_tgf
+fn get_tgf<'a, S1: 'a, S2: 'a, F>(get_edges: F) -> String
+where
+    S1: AsRef<str>,
+    S2: AsRef<str>,
+    F: Fn() -> Box<Iterator<Item = &'a(S1, S2)>> {
     use std::collections::HashMap;
 
     let mut node_labels = HashMap::new();
 
     let mut counter = 0;
-    for &(ref s1, ref s2) in edges.iter() {
+    for &(ref s1, ref s2) in get_edges() {
         node_labels.entry(s1.as_ref()).or_insert_with(|| {
             counter += 1;
             counter
@@ -105,7 +109,7 @@ fn get_tgf<S1: AsRef<str>, S2: AsRef<str>>(edges: &Vec<(S1, S2)>) -> String {
 
     tgf.push_str("#\n");
 
-    for edge in edges.iter() {
+    for edge in get_edges() {
         let label1: usize = *node_labels.get(edge.0.as_ref()).unwrap_or(&0);
         let label2: usize = *node_labels.get(edge.1.as_ref()).unwrap_or(&0);
 
