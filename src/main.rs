@@ -1,3 +1,5 @@
+mod pair_store;
+
 use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
@@ -25,19 +27,30 @@ struct Opt {
     // /// A replacement regex applied to the result of the path regex.
     // #[structopt(long, short="pr")]
     // path_replace: Option<String>,
+
+    /// Allow multiple edges with the same source and target node.
+    #[structopt(long, short)]
+    multiple: bool,
 }
 
 use regex::Regex;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
+use std::collections::HashMap;
+
+use crate::pair_store::PairStore;
 
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
 
     let re = Regex::new(&opt.extract_regex)?;
 
-    let mut edges = Vec::new();
+    let mut edges: PairStore = if opt.multiple {
+        PairStore::Vec(Vec::new())
+    } else {
+        PairStore::HashMap(HashMap::new())
+    };
 
     use walkdir::WalkDir;
 
@@ -61,14 +74,14 @@ fn main() -> Result<(), Box<Error>> {
 
         for line in reader.lines().filter_map(|l| l.ok()) {
             for capture in re.captures_iter(&line) {
-                edges.push((file_node.clone(), (&capture[1]).to_owned()));
+                edges.add_pair(file_node.clone(), (&capture[1]).to_owned());
             }
         }
     }
 
-    edges.sort();
+    let sorted_edges = edges.sorted_pairs();
 
-    let tgf = get_tgf(|| Box::new(edges.iter()));
+    let tgf = get_tgf(&sorted_edges);
 
     println!("{}", tgf);
 
@@ -76,17 +89,17 @@ fn main() -> Result<(), Box<Error>> {
 }
 
 //the original version of this fn was from https://github.com/Ryan1729/lua_call_tgf
-fn get_tgf<'a, S1: 'a, S2: 'a, F>(get_edges: F) -> String
+fn get_tgf<S1, S2>(edges: &Vec<(S1, S2)>) -> String
 where
     S1: AsRef<str>,
-    S2: AsRef<str>,
-    F: Fn() -> Box<Iterator<Item = &'a(S1, S2)>> {
+    S2: AsRef<str>
+ {
     use std::collections::HashMap;
 
     let mut node_labels = HashMap::new();
 
     let mut counter = 0;
-    for &(ref s1, ref s2) in get_edges() {
+    for &(ref s1, ref s2) in edges.iter() {
         node_labels.entry(s1.as_ref()).or_insert_with(|| {
             counter += 1;
             counter
@@ -109,7 +122,7 @@ where
 
     tgf.push_str("#\n");
 
-    for edge in get_edges() {
+    for edge in edges.iter() {
         let label1: usize = *node_labels.get(edge.0.as_ref()).unwrap_or(&0);
         let label2: usize = *node_labels.get(edge.1.as_ref()).unwrap_or(&0);
 
