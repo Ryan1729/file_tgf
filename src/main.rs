@@ -32,6 +32,18 @@ struct Opt {
     /// Allow multiple edges with the same source and target node.
     #[structopt(long, short)]
     multiple: bool,
+
+    /// Stop removing # from node names. Note that enabling this option can cause the `.tgf` to be misinterpreted by other programs.
+    #[structopt(long, short)]
+    disable_hash_removal: bool,
+
+    /// A regex which filenames must match to be included in the scan.
+    /// If not specified, all files in the directory are used.
+    /// Note that only the file stem and extension are matched agains this regex.
+    /// So ".*e.*" matches `file_tgf/src/pair_store.rs` but not `file_tgf/src/main.rs`,
+    /// and ".*c.*" would match neither of them.
+    #[structopt(long, short)]
+    filename_regex: Option<String>,
 }
 
 use regex::Regex;
@@ -46,6 +58,11 @@ fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
 
     let re = Regex::new(&opt.extract_regex)?;
+    let file_re = match opt.filename_regex.map(|r| Regex::new(&r)) {
+            Some(Ok(x)) => Ok(Some(x)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }?;
 
     let mut edges: PairStore = if opt.multiple {
         PairStore::Vec(Vec::new())
@@ -61,6 +78,16 @@ fn main() -> Result<(), Box<Error>> {
 
     for dir_entry in search_files {
         let path = dir_entry.path();
+
+        if let Some(ref r) = file_re {
+            if path.file_name()
+                .and_then(|os_str| os_str.to_str())
+                .map(|f| !r.is_match(f))
+                .unwrap_or(false) {
+                continue;
+            }
+        }
+
         let file_node: String = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -77,7 +104,16 @@ fn main() -> Result<(), Box<Error>> {
 
         for line in reader.lines().filter_map(|l| l.ok()) {
             for capture in re.captures_iter(&line) {
-                edges.add_pair(file_node.clone(), (&capture[1]).to_owned());
+                let target = if opt.disable_hash_removal {
+                    (&capture[1]).to_owned()
+                } else {
+                    (&capture[1]).replace("#", "")
+                };
+
+                edges.add_pair(
+                    file_node.clone(),
+                    target
+                 );
             }
         }
     }
