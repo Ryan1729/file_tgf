@@ -1,12 +1,13 @@
 mod pair_store;
 
 use structopt::StructOpt;
+use std::path::PathBuf;
 
 #[derive(StructOpt, Debug)]
 struct Opt {
-    // /// Input directory. Defaults to the current directory
-    // #[structopt(name = "input", long, short, parse(from_os_str))]
-    // output: Option<PathBuf>,
+    /// Input directory. Defaults to the current directory
+    #[structopt(name = "input", long, short, parse(from_os_str))]
+    input: Option<PathBuf>,
     //
     // /// Output file. If absent the result will be printed.
     // #[structopt(name = "output", long, short, parse(from_os_str))]
@@ -54,7 +55,9 @@ fn main() -> Result<(), Box<Error>> {
 
     use walkdir::WalkDir;
 
-    let search_files = WalkDir::new(".").into_iter().filter_map(|e| e.ok());
+    let search_files = WalkDir::new(opt.input.unwrap_or_else(|| PathBuf::from(".")))
+        .into_iter()
+        .filter_map(|e| e.ok());
 
     for dir_entry in search_files {
         let path = dir_entry.path();
