@@ -8,10 +8,10 @@ struct Opt {
     /// Input directory. Defaults to the current directory
     #[structopt(name = "input", long, short, parse(from_os_str))]
     input: Option<PathBuf>,
-    //
-    // /// Output file. If absent the result will be printed.
-    // #[structopt(name = "output", long, short, parse(from_os_str))]
-    // output: Option<PathBuf>,
+
+    /// Output file. If absent the result will be printed.
+    #[structopt(name = "output", long, short, parse(from_os_str))]
+    output: Option<PathBuf>,
 
     /// A regex to extract the node names from within the file.
     extract_regex: String,
@@ -122,7 +122,15 @@ fn main() -> Result<(), Box<Error>> {
 
     let tgf = get_tgf(&sorted_edges);
 
-    println!("{}", tgf);
+    if let Some(Ok(f)) = opt.output.map(|path|  OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)) {
+        f.write_all(tgf.as_bytes());
+        f.flush();
+    } else {
+        println!("{}", tgf);
+    }
 
     Ok(())
 }
