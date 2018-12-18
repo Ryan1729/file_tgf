@@ -56,7 +56,7 @@ struct Opt {
     filename_regex: Option<String>,
 }
 
-use regex::Regex;
+use regex::{Regex, Captures};
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, BufRead};
@@ -74,6 +74,33 @@ fn compile_optional_regex(option: Option<String>) -> Result<Option<Regex>, impl 
 
 fn make_empty_string() -> String {
     "".to_string()
+}
+
+fn main_capture<'a>(capture: &'a Captures<'a>) -> &'a str {
+    if capture.len() > 1 {
+        &capture[1]
+    } else {
+        &capture[0]
+    }
+}
+
+fn extract_then_replace<'a>(
+    capture: &'a Captures<'a>,
+    replace_regex: Option<&Regex>,
+    replace_string: &str,
+    disable_hash_removal: bool
+) -> String {
+    let mut output: String = if disable_hash_removal {
+        main_capture(&capture).to_owned()
+    } else {
+        main_capture(&capture).replace("#", "")
+    };
+
+    if let Some(ref replace) = replace_regex {
+        output = replace.replace(&output, replace_string).to_string();
+    }
+
+    output
 }
 
 fn main() -> Result<(), Box<Error>> {
@@ -118,16 +145,12 @@ fn main() -> Result<(), Box<Error>> {
         if let Some(ref r) = path_re {
             if let Some(path) = path.to_str() {
                 for capture in r.captures_iter(&path) {
-                    let mut node: String = if opt.disable_hash_removal {
-                        (&capture[1]).to_owned()
-                    } else {
-                        (&capture[1]).replace("#", "")
-                    };
-
-                    if let Some(ref replace) = path_replace {
-                        let s: &str = &path_replace_string;
-                        node = replace.replace(&node, s).to_string();
-                    }
+                    let node: String = extract_then_replace(
+                        &capture,
+                        path_replace.as_ref(),
+                        &path_replace_string,
+                        opt.disable_hash_removal
+                    );
 
                     file_nodes.push(node);
                 }
@@ -155,16 +178,12 @@ fn main() -> Result<(), Box<Error>> {
 
             for line in reader.lines().filter_map(|l| l.ok()) {
                 for capture in re.captures_iter(&line) {
-                    let mut target = if opt.disable_hash_removal {
-                        (&capture[1]).to_owned()
-                    } else {
-                        (&capture[1]).replace("#", "")
-                    };
-
-                    if let Some(ref replace) = extract_replace {
-                        let s: &str = &extract_replace_string;
-                        target = replace.replace(&target, s).to_string();
-                    }
+                    let target = extract_then_replace(
+                        &capture,
+                        extract_replace.as_ref(),
+                        &extract_replace_string,
+                        opt.disable_hash_removal
+                    );
 
                     edges.add_pair(
                         file_node.clone(),
