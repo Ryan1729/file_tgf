@@ -16,10 +16,14 @@ struct Opt {
     /// A regex to extract the node names from within the file.
     extract_regex: String,
 
-    // /// A replacement regex applied to the result of the extract-find regex.
-    // #[structopt(long, short="er")]
-    // extract_replace: Option<String>,
-    //
+    /// A replacement regex applied to the result of the extract-find regex.
+    #[structopt(long)]
+    extract_replace_regex: Option<String>,
+
+    /// The string the matches of extraction replace regex will be replaced with. Defaults to "".
+    #[structopt(long)]
+    extract_replace_string: Option<String>,
+
     // /// A regex to extract the node names from the path of the files.
     // /// If not specified, the file stem is used. (ex: `/dir/foo.txt` becomes `foo`)
     // #[structopt(long, short)]
@@ -54,15 +58,26 @@ use std::collections::HashMap;
 
 use crate::pair_store::PairStore;
 
+fn compile_optional_regex(option: Option<String>) -> Result<Option<Regex>, impl Error> {
+    match option.map(|r| Regex::new(&r)) {
+        Some(Ok(x)) => Ok(Some(x)),
+        Some(Err(e)) => Err(e),
+        None => Ok(None),
+    }
+}
+
+fn make_empty_string() -> String {
+    "".to_string()
+}
+
 fn main() -> Result<(), Box<Error>> {
     let opt = Opt::from_args();
 
     let re = Regex::new(&opt.extract_regex)?;
-    let file_re = match opt.filename_regex.map(|r| Regex::new(&r)) {
-            Some(Ok(x)) => Ok(Some(x)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }?;
+    let extract_replace = compile_optional_regex(opt.extract_replace_regex)?;
+    let file_re = compile_optional_regex(opt.filename_regex)?;
+    // let path_re = compile_optional_regex(opt.path_regex)?;
+    // let path_replace = compile_optional_regex(opt.path_replace)?;
 
     let mut edges: PairStore = if opt.multiple {
         PairStore::Vec(Vec::new())
@@ -75,6 +90,8 @@ fn main() -> Result<(), Box<Error>> {
     let search_files = WalkDir::new(opt.input.unwrap_or_else(|| PathBuf::from(".")))
         .into_iter()
         .filter_map(|e| e.ok());
+
+    let extract_replace_string = opt.extract_replace_string.unwrap_or_else(make_empty_string);
 
     for dir_entry in search_files {
         let path = dir_entry.path();
@@ -104,11 +121,16 @@ fn main() -> Result<(), Box<Error>> {
 
         for line in reader.lines().filter_map(|l| l.ok()) {
             for capture in re.captures_iter(&line) {
-                let target = if opt.disable_hash_removal {
+                let mut target = if opt.disable_hash_removal {
                     (&capture[1]).to_owned()
                 } else {
                     (&capture[1]).replace("#", "")
                 };
+
+                if let Some(ref replace) = extract_replace {
+                    let s: &str = &extract_replace_string;
+                    target = replace.replace(&target, s).to_string();
+                }
 
                 edges.add_pair(
                     file_node.clone(),
@@ -122,12 +144,14 @@ fn main() -> Result<(), Box<Error>> {
 
     let tgf = get_tgf(&sorted_edges);
 
-    if let Some(Ok(f)) = opt.output.map(|path|  OpenOptions::new()
+    use std::fs::OpenOptions;
+    if let Some(Ok(mut f)) = opt.output.map(|path|  OpenOptions::new()
         .append(true)
         .create(true)
         .open(path)) {
-        f.write_all(tgf.as_bytes());
-        f.flush();
+            use std::io::Write;
+        f.write_all(tgf.as_bytes())?;
+        f.flush()?;
     } else {
         println!("{}", tgf);
     }
