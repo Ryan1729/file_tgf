@@ -20,18 +20,24 @@ struct Opt {
     #[structopt(long)]
     extract_replace_regex: Option<String>,
 
-    /// The string the matches of extraction replace regex will be replaced with. Defaults to "".
+    /// The string the matches of extraction replace regex will be replaced with.
+    /// Defaults to "".
     #[structopt(long)]
     extract_replace_string: Option<String>,
 
-    // /// A regex to extract the node names from the path of the files.
-    // /// If not specified, the file stem is used. (ex: `/dir/foo.txt` becomes `foo`)
-    // #[structopt(long, short)]
-    // path_regex: Option<String>,
-    //
-    // /// A replacement regex applied to the result of the path regex.
-    // #[structopt(long, short="pr")]
-    // path_replace: Option<String>,
+    /// A regex to extract the node names from the path of the files.
+    /// If not specified, the file stem is used. (ex: `/dir/foo.txt` becomes `foo`)
+    #[structopt(long)]
+    path_regex: Option<String>,
+
+    /// A replacement regex applied to the result of the path regex.
+    #[structopt(long)]
+    path_replace_regex: Option<String>,
+
+    /// The string the matches of path replace regex will be replaced with.
+    /// Defaults to "".
+    #[structopt(long)]
+    path_replace_string: Option<String>,
 
     /// Allow multiple edges with the same source and target node.
     #[structopt(long, short)]
@@ -75,9 +81,13 @@ fn main() -> Result<(), Box<Error>> {
 
     let re = Regex::new(&opt.extract_regex)?;
     let extract_replace = compile_optional_regex(opt.extract_replace_regex)?;
+    let extract_replace_string = opt.extract_replace_string.unwrap_or_else(make_empty_string);
+
     let file_re = compile_optional_regex(opt.filename_regex)?;
-    // let path_re = compile_optional_regex(opt.path_regex)?;
-    // let path_replace = compile_optional_regex(opt.path_replace)?;
+
+    let path_re = compile_optional_regex(opt.path_regex)?;
+    let path_replace = compile_optional_regex(opt.path_replace_regex)?;
+    let path_replace_string = opt.path_replace_string.unwrap_or_else(make_empty_string);
 
     let mut edges: PairStore = if opt.multiple {
         PairStore::Vec(Vec::new())
@@ -91,7 +101,7 @@ fn main() -> Result<(), Box<Error>> {
         .into_iter()
         .filter_map(|e| e.ok());
 
-    let extract_replace_string = opt.extract_replace_string.unwrap_or_else(make_empty_string);
+    let mut file_nodes: Vec<String> = Vec::new();
 
     for dir_entry in search_files {
         let path = dir_entry.path();
@@ -105,39 +115,66 @@ fn main() -> Result<(), Box<Error>> {
             }
         }
 
-        let file_node: String = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("file_tgf_unknown")
-            .to_owned();
+        if let Some(ref r) = path_re {
+            if let Some(path) = path.to_str() {
+                for capture in r.captures_iter(&path) {
+                    let mut node: String = if opt.disable_hash_removal {
+                        (&capture[1]).to_owned()
+                    } else {
+                        (&capture[1]).replace("#", "")
+                    };
 
-        let reader = {
-            if let Ok(f) = File::open(path){
-                BufReader::new(f)
+                    if let Some(ref replace) = path_replace {
+                        let s: &str = &path_replace_string;
+                        node = replace.replace(&node, s).to_string();
+                    }
+
+                    file_nodes.push(node);
+                }
             } else {
                 continue;
             }
-        };
+        } else {
+            file_nodes.push(
+                path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("file_tgf_unknown")
+                .to_owned()
+            );
+        }
 
-        for line in reader.lines().filter_map(|l| l.ok()) {
-            for capture in re.captures_iter(&line) {
-                let mut target = if opt.disable_hash_removal {
-                    (&capture[1]).to_owned()
+        for file_node in file_nodes.iter() {
+            let reader = {
+                if let Ok(f) = File::open(path){
+                    BufReader::new(f)
                 } else {
-                    (&capture[1]).replace("#", "")
-                };
-
-                if let Some(ref replace) = extract_replace {
-                    let s: &str = &extract_replace_string;
-                    target = replace.replace(&target, s).to_string();
+                    continue;
                 }
+            };
 
-                edges.add_pair(
-                    file_node.clone(),
-                    target
-                 );
+            for line in reader.lines().filter_map(|l| l.ok()) {
+                for capture in re.captures_iter(&line) {
+                    let mut target = if opt.disable_hash_removal {
+                        (&capture[1]).to_owned()
+                    } else {
+                        (&capture[1]).replace("#", "")
+                    };
+
+                    if let Some(ref replace) = extract_replace {
+                        let s: &str = &extract_replace_string;
+                        target = replace.replace(&target, s).to_string();
+                    }
+
+                    edges.add_pair(
+                        file_node.clone(),
+                        target
+                     );
+                }
             }
         }
+
+        file_nodes.clear();
     }
 
     let sorted_edges = edges.sorted_pairs();
