@@ -170,7 +170,15 @@ fn main() -> Result<(), Box<Error>> {
         for file_node in file_nodes.iter() {
             let reader = {
                 if let Ok(f) = File::open(path){
-                    BufReader::new(f)
+                    if let Ok(metadata) = f.metadata() {
+                        if metadata.is_file() {
+                            BufReader::new(f)
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
                 } else {
                     continue;
                 }
@@ -221,8 +229,6 @@ where
     S1: AsRef<str>,
     S2: AsRef<str>
  {
-    use std::collections::HashMap;
-
     let mut node_labels = HashMap::new();
 
     let mut counter = 0;
