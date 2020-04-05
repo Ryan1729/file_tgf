@@ -139,9 +139,9 @@ fn run_for_tgf(opt: Opt) -> Res<String> {
     let path_replace_string = opt.path_replace_string.unwrap_or_else(make_empty_string);
 
     let mut edges: PairStore = if opt.multiple {
-        PairStore::Vec(Vec::new())
+        PairStore::new_multiple()
     } else {
-        PairStore::HashMap(HashMap::new())
+        PairStore::new()
     };
 
     use walkdir::WalkDir;
@@ -154,7 +154,7 @@ fn run_for_tgf(opt: Opt) -> Res<String> {
     
     for dir_entry in search_files {
         let path = dir_entry.path();
-dbg!(path);
+
         if let Some(ref r) = file_re {
             if path.file_name()
                 .and_then(|os_str| os_str.to_str())
@@ -221,13 +221,13 @@ dbg!(path);
                      );
                 }
             }
+
         }
 
         file_nodes.clear();
     }
 
     let sorted_edges = edges.sorted_pairs();
-dbg!(&sorted_edges);
     Ok(get_tgf(&sorted_edges))
 }
 
