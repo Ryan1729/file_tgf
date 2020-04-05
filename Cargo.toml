@@ -8,3 +8,6 @@ edition = "2018"
 structopt = "0.3"
 regex = "1"
 walkdir = "2"
+
+[dev-dependencies]
+pretty_assertions = "0.6.1"

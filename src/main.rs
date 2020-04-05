@@ -103,9 +103,31 @@ fn extract_then_replace<'a>(
     output
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+pub type Res<A> = Result<A, Box<dyn Error>>;
+
+fn main() -> Res<()> {
     let opt = Opt::from_args();
 
+    let output_path = opt.output.clone();
+
+    let tgf = run_for_tgf(opt)?;
+
+    use std::fs::OpenOptions;
+    if let Some(Ok(mut f)) = output_path.map(|path|  OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(path)) {
+            use std::io::Write;
+        f.write_all(tgf.as_bytes())?;
+        f.flush()?;
+    } else {
+        println!("{}", tgf);
+    }
+
+    Ok(())
+}
+
+fn run_for_tgf(opt: Opt) -> Res<String> {
     let re = Regex::new(&opt.extract_regex)?;
     let extract_replace = compile_optional_regex(opt.extract_replace_regex)?;
     let extract_replace_string = opt.extract_replace_string.unwrap_or_else(make_empty_string);
@@ -129,10 +151,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .filter_map(|e| e.ok());
 
     let mut file_nodes: Vec<String> = Vec::new();
-
+    
     for dir_entry in search_files {
         let path = dir_entry.path();
-
+dbg!(path);
         if let Some(ref r) = file_re {
             if path.file_name()
                 .and_then(|os_str| os_str.to_str())
@@ -205,22 +227,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let sorted_edges = edges.sorted_pairs();
-
-    let tgf = get_tgf(&sorted_edges);
-
-    use std::fs::OpenOptions;
-    if let Some(Ok(mut f)) = opt.output.map(|path|  OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(path)) {
-            use std::io::Write;
-        f.write_all(tgf.as_bytes())?;
-        f.flush()?;
-    } else {
-        println!("{}", tgf);
-    }
-
-    Ok(())
+dbg!(&sorted_edges);
+    Ok(get_tgf(&sorted_edges))
 }
 
 //the original version of this fn was from https://github.com/Ryan1729/lua_call_tgf
@@ -264,3 +272,6 @@ where
 
     tgf
 }
+
+#[cfg(test)]
+mod tests;
