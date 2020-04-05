@@ -103,7 +103,7 @@ fn extract_then_replace<'a>(
     output
 }
 
-fn main() -> Result<(), Box<Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let opt = Opt::from_args();
 
     let re = Regex::new(&opt.extract_regex)?;
