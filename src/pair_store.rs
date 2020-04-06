@@ -32,6 +32,7 @@ impl PairStore {
             PairStore::HashMap(map) => {
                 let mut output: Vec<(String, String)> = map.keys().cloned().collect();
                 output.sort();
+                dbg!(&output);
                 output
             },
         }

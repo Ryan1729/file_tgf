@@ -128,6 +128,12 @@ fn main() -> Res<()> {
 }
 
 fn run_for_tgf(opt: Opt) -> Res<String> {
+    let edges = run_for_edges(opt)?;
+
+    Ok(get_tgf(&edges))
+}
+
+fn run_for_edges(opt: Opt) -> Res<Vec<(String, String)>> {
     let re = Regex::new(&opt.extract_regex)?;
     let extract_replace = compile_optional_regex(opt.extract_replace_regex)?;
     let extract_replace_string = opt.extract_replace_string.unwrap_or_else(make_empty_string);
@@ -227,8 +233,7 @@ fn run_for_tgf(opt: Opt) -> Res<String> {
         file_nodes.clear();
     }
 
-    let sorted_edges = edges.sorted_pairs();
-    Ok(get_tgf(&sorted_edges))
+    Ok(edges.sorted_pairs())
 }
 
 //the original version of this fn was from https://github.com/Ryan1729/lua_call_tgf
@@ -256,6 +261,7 @@ where
     let mut node_label_pairs: Vec<_> = node_labels.iter().collect();
 
     node_label_pairs.sort();
+    dbg!(&node_label_pairs);
 
     for &(node, label) in node_label_pairs.iter() {
         tgf.push_str(&format!("{} {}\n", label, node));
