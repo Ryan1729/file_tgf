@@ -1,7 +1,9 @@
 use super::*;
 
 use pretty_assertions::{assert_eq};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
+
+const RUST_IMPORT_REGEX :&'static str= "(?:pub )?use ([A-Za-z_0-9]+)[:;]";
 
 struct TGFSpec {
     folder: &'static str,
@@ -37,8 +39,8 @@ fn run_edges_spec(EdgesSpec { folder, regex }: EdgesSpec) -> Vec<(String, String
 
 macro_rules! assert_has_same_lines {
     ($actual: expr, $expected: expr) => {{
-        let actual_set: HashSet<&str> = $actual.lines().collect();
-        let expected_set: HashSet<&str> = $expected.lines().collect();
+        let actual_set: BTreeSet<&str> = $actual.lines().collect();
+        let expected_set: BTreeSet<&str> = $expected.lines().collect();
 
         assert_eq!(actual_set, expected_set);
     }}
@@ -280,6 +282,56 @@ r#"1 pub_arb_g_i
 6 3
 8 3
 9 10
+"#;
+
+    assert_has_same_lines!(actual, expected);
+}
+
+#[test]
+fn the_found_example_2_files_with_this_regex_produce_a_tgf_with_the_expected_lines() {
+    let actual = run_tgf_spec(TGFSpec {
+        folder: "./test_file_tree/found_example_2",
+        regex: RUST_IMPORT_REGEX
+    });
+
+    let expected = 
+r#"1 pub_arb_g_i
+2 g_i
+3 proptest
+4 pub_arb_platform_types
+5 platform_types
+6 pub_arb_rust_code
+7 macros
+8 pub_arb_std
+9 pub_arb_text_buffer
+10 text_buffer
+#
+1 2
+1 2
+1 3
+1 3
+4 5
+6 7
+6 3
+8 3
+9 10
+"#;
+
+    assert_has_same_lines!(actual, expected);
+}
+
+#[test]
+fn the_found_example_2_reduction_1_files_with_this_regex_produce_a_tgf_with_the_expected_lines() {
+    let actual = run_tgf_spec(TGFSpec {
+        folder: "./test_file_tree/found_example_2_reduction_1",
+        regex: RUST_IMPORT_REGEX
+    });
+
+    let expected = 
+r#"1 pub_arb_platform_types
+2 platform_types
+#
+1 2
 "#;
 
     assert_has_same_lines!(actual, expected);
