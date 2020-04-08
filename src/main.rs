@@ -261,7 +261,6 @@ where
     let mut node_label_pairs: Vec<_> = node_labels.iter().collect();
 
     node_label_pairs.sort();
-    dbg!(&node_label_pairs);
 
     for &(node, label) in node_label_pairs.iter() {
         tgf.push_str(&format!("{} {}\n", label, node));
